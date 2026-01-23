@@ -40,19 +40,34 @@ export function EditChallengeRequestModal({ children, request, onSuccess }: Edit
 
     try {
       console.log('Creating challenge from request:', formData);
-      
+
+      // Get current user ID and session
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Debug: Check JWT claims
+      console.log('User ID:', user?.id);
+      console.log('User role from metadata:', session?.user?.user_metadata?.role);
+      console.log('Full user_metadata:', session?.user?.user_metadata);
+
+      const insertData = {
+        title: formData.title,
+        description: formData.description,
+        difficulty: formData.difficulty, // Keep capitalized (Beginner, Intermediate, Expert)
+        xp_reward: formData.xpReward,
+        image: formData.imageUrl,
+        requirements: formData.requirements.filter(r => r.trim()).join('; '), // Send as STRING (semicolon-separated)
+        created_by: user?.id,
+        status: 'published', // Add explicit status
+        created_at: new Date().toISOString()
+      };
+
+      console.log('Attempting to insert challenge with data:', insertData);
+
       // Create the challenge
       const { data: challengeData, error: challengeError } = await supabase
         .from('challenges')
-        .insert({
-          title: formData.title,
-          description: formData.description,
-          difficulty: formData.difficulty.toLowerCase(),
-          xp_reward: formData.xpReward,
-          image: formData.imageUrl,
-          requirements: formData.requirements.join('; '),
-          created_at: new Date().toISOString()
-        })
+        .insert(insertData)
         .select();
 
       if (challengeError) {
@@ -62,12 +77,13 @@ export function EditChallengeRequestModal({ children, request, onSuccess }: Edit
 
       console.log('Challenge created:', challengeData);
 
-      // Update the request status to approved
+      // Update the request status to approved (user already fetched above)
       const { error: updateError } = await supabase
         .from('challenge_requests')
-        .update({ 
+        .update({
           status: 'approved',
-          reviewed_at: new Date().toISOString()
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user?.id
         })
         .eq('id', request.id);
 
